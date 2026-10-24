@@ -23,10 +23,46 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("failed to run app");
 }
+/// Overrides window.open so OAuth popups (Google sign-in) open as an in-app
+/// Tauri window instead of being silently dropped by the webview on Linux.
+const OAUTH_WINDOW_OPEN_SCRIPT: &str = r#"
+(function() {
+    if (window.__kimiOAuthHookInstalled) return;
+    window.__kimiOAuthHookInstalled = true;
 
+    window.open = function(url, target, features) {
+        try {
+            var u = new URL(url, location.href);
+            var isOAuth = u.host.indexOf('google') !== -1
+                || u.host.indexOf('accounts.') === 0
+                || u.pathname.indexOf('oauth') !== -1
+                || u.pathname.indexOf('login') !== -1;
+            if (isOAuth) {
+                window.__TAURI_INTERNALS__.invoke('plugin:webview|create_webview_window', {
+                    options: {
+                        label: 'oauth-' + Date.now(),
+                        url: url,
+                        title: 'Sign in',
+                        width: 520,
+                        height: 720,
+                        resizable: true,
+                        center: true
+                    }
+                }).catch(function(e) {
+                    console.error('[kimi-desktop-linux] oauth popup failed', e);
+                    window.location.href = url;
+                });
+                return null;
+            }
+        } catch (e) {}
+        return null;
+    };
+})();
+"#;
 /// Kimi's web app requires the verification code field to be non-empty before
 /// the Send button triggers SMS delivery. This helper auto-fills a dummy digit
 /// when Send is clicked on an empty field.
+
 const PHONE_CODE_AUTOFILL_SCRIPT: &str = r#"
 (function() {
     if (window.__kimiPhoneHelperInstalled) return;
@@ -63,4 +99,5 @@ const PHONE_CODE_AUTOFILL_SCRIPT: &str = r#"
         }
     }, true);
 })();
+    
 "#;
