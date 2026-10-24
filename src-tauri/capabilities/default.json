@@ -9,6 +9,8 @@
   "permissions": [
     "core:default",
     "shell:allow-open",
+    "core:webview:allow-create-webview",
+    "core:webview:allow-create-webview-window",
     "window-state:allow-restore-state",
     "window-state:allow-save-window-state"
   ]
